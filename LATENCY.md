@@ -37,7 +37,15 @@ Findings:
 - **Most of the model time comes before the first token.** First token takes 3.1–4.8 s, because each call carries about 8–10k input tokens. More than half of that was tool schemas, and the rest is the prompt plus history that grows each turn.
 - **Variance is high.** The two slow turns (11.2 s and 18.8 s) are outliers against a 3.4–5.6 s typical. Provider-side variance is the likely cause, which is what latency-sorted routing (below) targets.
 
-**After optimisation:** _re-measure from the console and add a row set here_.
+**After optimisation**, measured live on Vercel (function in `syd1`, next to the Supabase database) on 15 Oct 2026:
+
+| Request | Route / model | LLM calls | Total | Model | Tools | First token | Input / output tokens |
+|---|---|---|---|---|---|---|---|
+| What's my portfolio worth? (before region move) | fast / gpt-4.1-mini | 3 | 9.79 s | 6.90 s | 365 ms | 8.89 s | 10,026 / 318 |
+| What's my portfolio worth? (after) | fast / gpt-4.1-mini | 2 | **5.04 s** | 4.84 s | **5 ms** | 4.21 s | 6,770 / 210 |
+| What's my ROI so far? (after) | fast / gpt-4.1-mini | — | **3.57 s** | — | — | — | — |
+
+Moving the function next to the database cut tool time from 365 ms to 5 ms and non-model overhead from about 2.5 s to about 0.2 s. Blocking the repeated tool call removed one model round trip. **A typical analytical question now takes about 3.5–5 s end to end, about 95% of it model time.**
 
 ## What was optimised
 

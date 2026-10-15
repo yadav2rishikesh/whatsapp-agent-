@@ -2,8 +2,11 @@
 
 A WhatsApp-style chat agent ("Aria") that manages and analyses a user's property portfolio, plus a business console for the team to monitor conversations, tool calls, latency and flags.
 
-- **Live app:** `<frontend URL>`. The chat is at `/` and the business console at `/admin`.
-- **API:** `<backend URL>/api/health`
+- **Live app:** https://whatsapp-agent-theta-black.vercel.app (chat at `/`)
+- **Business console:** https://whatsapp-agent-theta-black.vercel.app/admin
+- **API health:** https://whatsapp-agent-theta-black.vercel.app/api/health
+
+Hosted on free tiers (Vercel + Supabase). The first request after a period of inactivity can take a few extra seconds while the function starts.
 
 | Doc | What's in it |
 |---|---|
