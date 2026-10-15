@@ -76,6 +76,15 @@ Each entry gives the decision, the alternatives considered, and why.
 - **Decision:** All tool-argument models inherit `Lenient`, which drops `""`, `[]`, `0` and `"null"` before validation. The prompt also tells the model to omit unused arguments.
 - **Trade-off:** A literal 0 can't be passed as a value. That's acceptable: zero rent is expressed through occupancy (Vacant/Self-occupied clears rent explicitly), and no other field has a meaningful zero. It also prevents a model-filled `annual_rent: 0` from silently wiping real rent on a value update. Regression tests replay the exact placeholder-filled calls.
 
-### D15. Postgres-safe, race-safe startup on serverless
-- **Found when deploying to Vercel + Supabase:** two bugs that SQLite never showed. (1) Seeding inserted properties before users, and Postgres enforces the `properties.user_id` foreign key while SQLite doesn't by default. (2) The first page load fires several API requests at once; each lands on a fresh serverless instance, and they raced on `CREATE TABLE` and the inserts.
-- **Decision:** Flush users before properties. Wrap table creation and seeding in a Postgres advisory lock (`pg_advisory_lock`), so one instance sets up while the others wait and then skip. Startup errors are logged instead of crashing the function. Verified with 10 simultaneous cold starts × 3 rounds on Postgres 16 (exactly one seeds, 0 errors), plus the full test and verification suites run against Postgres.
+### D15. Postgres-safe, serverless-safe database use
+- **Found when deploying to Vercel + Supabase**, in order. None of these show up with local SQLite:
+  1. SQLAlchemy 2.1 defaults `postgresql://` to the psycopg v3 driver, but psycopg2 is installed, so URLs are pinned to `postgresql+psycopg2://`.
+  2. Seeding inserted properties before users. Postgres enforces the `properties.user_id` foreign key (SQLite doesn't by default), so users are now flushed first.
+  3. The first page load fires several API calls at once, each on a fresh serverless instance, and they raced on `CREATE TABLE` and the inserts.
+  4. Each instance kept a connection pool open, and frozen instances held their connections, which exhausted Supabase's pooler (`EMAXCONNSESSION … pool_size: 15`).
+- **Decision:**
+  - On Vercel (`VERCEL` env), use **no connection pool** (`NullPool`): one connection per request, closed when done.
+  - Setup (create tables and seed) runs **once per instance** in the startup hook, in **one connection and one transaction**, guarded by a transaction-scoped advisory lock (`pg_advisory_xact_lock`). That also works behind Supabase's transaction pooler.
+  - Startup errors are logged instead of crashing, and `/api/health` reports DB status.
+- **Verified** on Postgres 16 with the role capped at 15 connections. With 12 simultaneous fresh instances, all 12 succeeded and exactly one seeded. Connections held while idle went from 12 (pooled) to 0 (NullPool). The full test, data (109) and API (23) suites pass in this mode.
+- **Trade-off:** each request pays one new DB connection (a TCP + TLS handshake to the Sydney database; tens to a few hundred ms, not measured here). For a long-running server the code keeps pooling.

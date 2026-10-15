@@ -53,7 +53,8 @@ Findings:
 10. **History trimmed.** 2 turns are replayed in full instead of 3, and only the latest keeps full tool results. Older ones are cut to 600 characters, and text-only history drops from 8 turns to 6.
 11. **Latency-sorted provider routing.** `provider.sort = "latency"` asks OpenRouter to try the lowest-latency provider for the model first (`OPENROUTER_PROVIDER_SORT`).
 12. **Capped output (`max_tokens = 1200`).** Replies are short anyway. Without the cap, OpenRouter reserves credit for the model's full 64k output window and rejects low-balance keys with 402.
-13. **Bounded loops.** At most 6 agent steps, a 30 s model timeout and 1 retry, then the fallback model. A runaway loop can't hang a request.
+13. **Serverless DB connections.** On Vercel each request opens one DB connection and closes it (no pool), so idle instances never hold Supabase's limited pooler slots (DECISIONS D15). This costs one connection setup per request; a long-running deployment keeps pooling.
+14. **Bounded loops.** At most 6 agent steps, a 30 s model timeout and 1 retry, then the fallback model. A runaway loop can't hang a request.
 
 ## Scaling to higher volume
 

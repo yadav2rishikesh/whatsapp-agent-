@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import statistics
 from contextlib import asynccontextmanager
@@ -25,7 +26,10 @@ from .tools import _to_dict
 
 @asynccontextmanager
 async def lifespan(_app):
-    seed()
+    try:
+        seed()  # create tables + load CSVs once (no-op if already done)
+    except Exception:  # keep serving; /api/health reports DB status and logs show why
+        logging.getLogger("startup").exception("Database setup failed")
     yield
 
 
@@ -49,7 +53,12 @@ def admin_auth(x_admin_token: Optional[str] = Header(None)):
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "llm_configured": bool(config.OPENROUTER_API_KEY),
+    try:
+        with SessionLocal() as db:
+            db_status = f"ok ({db.query(User).count()} users)"
+    except Exception as e:  # e.g. wrong password, pooler full, network
+        db_status = f"error: {type(e).__name__}: {str(e).splitlines()[0][:200]}"
+    return {"ok": True, "db": db_status, "llm_configured": bool(config.OPENROUTER_API_KEY),
             "models": {"fast": config.MODEL_FAST, "strong": config.MODEL_STRONG, "fallback": config.MODEL_FALLBACK}}
 
 

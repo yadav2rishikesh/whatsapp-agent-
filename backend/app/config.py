@@ -9,7 +9,8 @@ load_dotenv(BASE_DIR / ".env")
 
 # Blank -> SQLite. On Vercel the code folder is read-only, so SQLite goes to /tmp
 # (temporary: resets on cold start). Set DATABASE_URL (Postgres) to keep data.
-_sqlite_dir = "/tmp" if os.getenv("VERCEL") else str(BASE_DIR)
+SERVERLESS = bool(os.getenv("VERCEL"))
+_sqlite_dir = "/tmp" if SERVERLESS else str(BASE_DIR)
 DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{_sqlite_dir}/portfolio.db"
 # Pin the Postgres driver to psycopg2 (installed via requirements). SQLAlchemy 2.1
 # defaults bare postgresql:// URLs to psycopg v3, which isn't installed. Also

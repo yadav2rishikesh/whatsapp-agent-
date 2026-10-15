@@ -6,11 +6,17 @@ from datetime import datetime, timezone
 from sqlalchemy import (JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer,
                         String, Text, create_engine)
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy.pool import NullPool
 
-from .config import DATABASE_URL
+from .config import DATABASE_URL, SERVERLESS
 
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=_connect_args, pool_pre_ping=True)
+# Serverless (Vercel): no connection pool. Each request opens one connection and
+# closes it when done. Otherwise every instance keeps up to 15 pooled connections
+# open (and frozen instances keep holding them), which exhausts Supabase's pooler
+# limit ("EMAXCONNSESSION max clients reached"). Long-running servers keep pooling.
+_pool_args = {"poolclass": NullPool} if SERVERLESS and not DATABASE_URL.startswith("sqlite") else {"pool_pre_ping": True}
+engine = create_engine(DATABASE_URL, connect_args=_connect_args, **_pool_args)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 Base = declarative_base()
 
