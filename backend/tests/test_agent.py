@@ -3,7 +3,7 @@ import json
 import os
 import tempfile
 
-os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp()}/test.db"
+os.environ.setdefault("DATABASE_URL", f"sqlite:///{tempfile.mkdtemp()}/test.db")  # set DATABASE_URL to test on Postgres
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

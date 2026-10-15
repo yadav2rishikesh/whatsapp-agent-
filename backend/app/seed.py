@@ -3,13 +3,46 @@ from __future__ import annotations
 
 import csv
 
+from contextlib import contextmanager
+
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+
 from .config import DATA_DIR
-from .db import Property, SessionLocal, User, init_db
+from .db import Property, SessionLocal, User, engine, init_db
+
+_SEED_LOCK_ID = 7_310_001  # arbitrary app-wide id for pg_advisory_lock
+
+
+@contextmanager
+def _setup_lock():
+    """Serialise table creation + seeding across processes.
+
+    On Vercel the first page load fires several requests at once, each on a fresh
+    serverless instance running this setup. Without a lock they race on CREATE
+    TABLE and on the inserts. Postgres advisory lock = one at a time; the others
+    wait, then see the data and skip. SQLite (local, single process) needs none.
+    """
+    if engine.dialect.name != "postgresql":
+        yield
+        return
+    with engine.connect() as conn:
+        conn.execute(text("SELECT pg_advisory_lock(:k)"), {"k": _SEED_LOCK_ID})
+        try:
+            yield
+        finally:
+            conn.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _SEED_LOCK_ID})
+            conn.commit()
 from .normalize import (normalize_occupancy, normalize_type, parse_inr, parse_location,
                         parse_number, parse_value_range)
 
 
 def seed(force: bool = False) -> dict:
+    with _setup_lock():
+        return _seed(force)
+
+
+def _seed(force: bool) -> dict:
     init_db()
     db = SessionLocal()
     try:
@@ -28,6 +61,10 @@ def seed(force: bool = False) -> dict:
                     value_pref_min_inr=lo, value_pref_max_inr=hi,
                     value_pref_raw=r["portfolio_value_preference_inr"],
                 ))
+        # Users must exist before properties reference them. Postgres enforces the
+        # foreign key (SQLite doesn't by default), and the unit of work doesn't
+        # order the two tables because there is no relationship() between them.
+        db.flush()
 
         with open(DATA_DIR / "properties.csv", newline="", encoding="utf-8") as f:
             for r in csv.DictReader(f):
@@ -48,6 +85,11 @@ def seed(force: bool = False) -> dict:
                 ))
         db.commit()
         return {"seeded": True}
+    except IntegrityError:
+        # Another serverless instance seeded at the same moment (parallel cold
+        # starts). Its data is already there, so this one just continues.
+        db.rollback()
+        return {"seeded": False, "note": "already seeded by a concurrent instance"}
     finally:
         db.close()
 
