@@ -30,6 +30,7 @@ SCRIPT = {
     "What's my ROI?": [("check_data_availability", {"question_topic": "ROI"})],
     "I want to talk to a human": [],
     "boom": "RAISE",
+    "Repeat yourself": [("portfolio_summary", {}), ("portfolio_summary", {})],
 }
 
 
@@ -248,3 +249,11 @@ def test_placeholder_fields_do_not_wipe_data(client):
     assert db.get(Property, "P003").annual_rent_inr == rent_before
     db.rollback()
     db.close()
+
+
+def test_duplicate_tool_call_not_rerun(client):
+    _, m = chat(client, "U001", "Repeat yourself")
+    calls = m["tool_calls"]
+    assert [c["name"] for c in calls] == ["portfolio_summary", "portfolio_summary"]
+    assert calls[0]["result"]["count"] == 3          # first call really ran
+    assert calls[1]["result"] == {"duplicate_call": True} and calls[1]["duration_ms"] == 0.0

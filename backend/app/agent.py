@@ -163,6 +163,7 @@ def build_graph(ctx: ToolContext, stats: RunStats, primary: str, fallback: str):
     llms = {m: LLM_FACTORY(m).bind_tools(schemas) for m in dict.fromkeys([primary, fallback])}
 
     writer = stats.events.append
+    done_calls: dict = {}  # (tool, args) -> result, for this turn only
 
     # config is passed explicitly to the model call so token streaming callbacks
     # also work on Python 3.10 (no implicit contextvar propagation there).
@@ -197,6 +198,20 @@ def build_graph(ctx: ToolContext, stats: RunStats, primary: str, fallback: str):
         step = sum(1 for m in state["messages"] if isinstance(m, AIMessage))
         for call in ai.tool_calls:
             name, args = call["name"], call.get("args", {})
+            key = (name, json.dumps(args, sort_keys=True, default=str))
+            if key in done_calls and name not in WRITE_TOOLS:
+                # The model repeated an identical read call in this turn (seen live
+                # with gpt-4.1-mini). Don't re-run it; hand back the same result and
+                # tell it to answer. Saves the tool time and usually a model step.
+                out.append(ToolMessage(
+                    content=_for_model({"duplicate_call": True,
+                                        "instruction": "You already called this with the same arguments in this turn "
+                                                       "and the result is unchanged. Do not call it again - answer the user now.",
+                                        "result": done_calls[key]}),
+                    tool_call_id=call["id"], name=name))
+                stats.tool_log.append({"step": step, "name": name, "args": args,
+                                       "result": {"duplicate_call": True}, "duration_ms": 0.0, "error": None})
+                continue
             writer({"type": "tool_start", "name": name, "args": args})
             t = time.perf_counter()
             err = None
@@ -218,6 +233,8 @@ def build_graph(ctx: ToolContext, stats: RunStats, primary: str, fallback: str):
                                    "duration_ms": round(dt, 2), "error": err})
             writer({"type": "tool_end", "name": name, "duration_ms": round(dt, 1), "ok": err is None,
                     "saved": bool(isinstance(result, dict) and result.get("saved"))})
+            if err is None:
+                done_calls[key] = result
             out.append(ToolMessage(content=_for_model(result), tool_call_id=call["id"], name=name))
         return {"messages": out}
 

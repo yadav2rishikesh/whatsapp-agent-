@@ -54,7 +54,9 @@ Findings:
 11. **Latency-sorted provider routing.** `provider.sort = "latency"` asks OpenRouter to try the lowest-latency provider for the model first (`OPENROUTER_PROVIDER_SORT`).
 12. **Capped output (`max_tokens = 1200`).** Replies are short anyway. Without the cap, OpenRouter reserves credit for the model's full 64k output window and rejects low-balance keys with 402.
 13. **Serverless DB connections.** On Vercel each request opens one DB connection and closes it (no pool), so idle instances never hold Supabase's limited pooler slots (DECISIONS D15). This costs one connection setup per request; a long-running deployment keeps pooling.
-14. **Bounded loops.** At most 6 agent steps, a 30 s model timeout and 1 retry, then the fallback model. A runaway loop can't hang a request.
+14. **Function next to the database.** Live on Vercel, a summary question took 9.8 s: 6.9 s model (3 calls), 0.37 s tools, and about 2.5 s of DB round trips between the function (Singapore) and Supabase (Sydney). The function now runs in `syd1`, the same AWS region as the database.
+15. **No repeated tool calls.** The live trace showed `gpt-4.1-mini` calling `portfolio_summary` twice with identical arguments. A repeat of an identical read call in the same turn now returns the earlier result with "answer now", instead of running again.
+16. **Bounded loops.** At most 6 agent steps, a 30 s model timeout and 1 retry, then the fallback model. A runaway loop can't hang a request.
 
 ## Scaling to higher volume
 

@@ -2,7 +2,7 @@
   "installCommand": "cd frontend && npm ci",
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/dist",
-  "regions": ["sin1"],
+  "regions": ["syd1"],
   "functions": {
     "api/index.py": {
       "maxDuration": 60,

@@ -87,7 +87,7 @@ The tests cover all 6 sample requests end to end through the graph, what-if-neve
    - `DATABASE_URL`: a Postgres URL, e.g. the Supabase **Session pooler** URI. Without it the app uses temporary SQLite in `/tmp`, which resets on cold starts.
 3. Click **Deploy**. Then check `/api/health`, which should show `"llm_configured": true`.
 
-The function region is `sin1` (Singapore), which is close to India and to the Supabase Sydney database. Each request can run for up to 60 s (Vercel Hobby allows 300 s); the longest measured reply was about 19 s.
+The function region is `syd1` (Sydney), the same AWS region (`ap-southeast-2`) as the Supabase database, so the many small DB round trips per request stay local. Each request can run for up to 60 s (Vercel Hobby allows 300 s); the longest measured reply was about 19 s.
 
 ## Assumptions
 
