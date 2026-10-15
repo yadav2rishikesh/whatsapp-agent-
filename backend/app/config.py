@@ -11,9 +11,13 @@ load_dotenv(BASE_DIR / ".env")
 # (temporary: resets on cold start). Set DATABASE_URL (Postgres) to keep data.
 _sqlite_dir = "/tmp" if os.getenv("VERCEL") else str(BASE_DIR)
 DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{_sqlite_dir}/portfolio.db"
-# Render/Heroku style URLs start with postgres:// which SQLAlchemy 2 rejects.
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+# Pin the Postgres driver to psycopg2 (installed via requirements). SQLAlchemy 2.1
+# defaults bare postgresql:// URLs to psycopg v3, which isn't installed. Also
+# accept the postgres:// scheme some hosts hand out.
+for _prefix in ("postgres://", "postgresql://"):
+    if DATABASE_URL.startswith(_prefix):
+        DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL[len(_prefix):]
+        break
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
